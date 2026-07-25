@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스피드체크 — 인터넷 속도 측정</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --panel: #131a2b;
+    --panel2: #1a2338;
+    --line: #263252;
+    --text: #e8edf7;
+    --muted: #8b96b0;
+    --accent: #2f81f7;
+    --accent2: #21d4a4;
+    --down: #2f81f7;
+    --up: #a970ff;
+    --ping: #21d4a4;
+    --danger: #ff5c7a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -10%, #16203a 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: "Pretendard", "Noto Sans KR", -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100%;
+  }
+  header {
+    width: 100%;
+    max-width: 960px;
+    padding: 24px 20px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
+  }
+  .logo .bolt {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .net-info { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .net-info b { color: var(--text); font-weight: 600; }
+
+  main {
+    width: 100%; max-width: 960px;
+    padding: 12px 20px 40px;
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+  }
+
+  /* ===== Gauge ===== */
+  .gauge-wrap { position: relative; width: min(420px, 88vw); user-select: none; }
+  .gauge-wrap svg { width: 100%; height: auto; display: block; }
+  .gauge-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding-top: 6%;
+    pointer-events: none;
+  }
+  .phase-label {
+    font-size: 13px; font-weight: 700; letter-spacing: 2px;
+    color: var(--muted); text-transform: uppercase;
+    display: flex; align-items: center; gap: 7px;
+    min-height: 20px;
+  }
+  .phase-label .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .phase-label.down .dot { background: var(--down); box-shadow: 0 0 10px var(--down); }
+  .phase-label.up .dot { background: var(--up); box-shadow: 0 0 10px var(--up); }
+  .phase-label.ping .dot { background: var(--ping); box-shadow: 0 0 10px var(--ping); }
+  .speed-value {
+    font-size: clamp(48px, 13vw, 74px);
+    font-weight: 800; letter-spacing: -2px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+  }
+  .speed-unit { font-size: 15px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+
+  /* ===== Start button ===== */
+  .start-btn {
+    margin-top: -6px;
+    padding: 15px 58px;
+    font-size: 17px; font-weight: 800; letter-spacing: 1px;
+    color: #fff; background: linear-gradient(135deg, var(--accent), #6a5cff);
+    border: none; border-radius: 999px; cursor: pointer;
+    box-shadow: 0 8px 30px rgba(47, 129, 247, 0.35);
+    transition: transform .15s, box-shadow .15s, opacity .15s;
+    font-family: inherit;
+  }
+  .start-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(47,129,247,.45); }
+  .start-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
+  .start-btn.testing { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
+
+  /* ===== Result cards ===== */
+  .cards {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .3s;
+  }
+  .card.active { border-color: var(--accent); }
+  .card .label { font-size: 12.5px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .card .bar { width: 4px; height: 12px; border-radius: 2px; }
+  .card.dl .bar { background: var(--down); }
+  .card.ul .bar { background: var(--up); }
+  .card.pg .bar { background: var(--ping); }
+  .card.jt .bar { background: #f7b731; }
+  .card .value {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .card .value small { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 3px; }
+
+  /* ===== Progress graph ===== */
+  .graph-panel {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px 10px;
+  }
+  .graph-panel h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  #graph { width: 100%; height: 110px; display: block; }
+
+  .grade {
+    width: 100%;
+    background: linear-gradient(135deg, rgba(47,129,247,.12), rgba(33,212,164,.10));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    display: none;
+    gap: 4px; flex-direction: column;
+  }
+  .grade.show { display: flex; }
+  .grade .title { font-size: 15px; font-weight: 800; }
+  .grade .desc { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
+
+  footer { padding: 18px; font-size: 12px; color: #566180; text-align: center; line-height: 1.7; }
+  .err {
+    display: none;
+    background: rgba(255,92,122,.12); border: 1px solid rgba(255,92,122,.4);
+    color: #ffb3c2; font-size: 13.5px; border-radius: 12px; padding: 12px 16px; width: 100%;
+  }
+  .err.show { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="bolt">⚡</div>스피드체크</div>
+  <div class="net-info" id="netInfo">네트워크 정보 불러오는 중…</div>
+</header>
+
+<main>
+  <div class="gauge-wrap">
+    <svg viewBox="0 0 300 195" id="gaugeSvg">
+      <defs>
+        <linearGradient id="gaugeGrad" x1="0%" y1="100%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#2f81f7"/>
+          <stop offset="60%" stop-color="#21d4a4"/>
+          <stop offset="100%" stop-color="#a970ff"/>
+        </linearGradient>
+      </defs>
+      <!-- track -->
+      <path d="M 30 170 A 120 120 0 1 1 270 170" fill="none" stroke="#232e4c" stroke-width="14" stroke-linecap="round"/>
+      <!-- progress -->
+      <path id="gaugeArc" d="M 30 170 A 120 120 0 1 1 270 170" fill="none" stroke="url(#gaugeGrad)"
+            stroke-width="14" stroke-linecap="round" pathLength="100"
+            stroke-dasharray="0 100" style="transition: stroke-dasharray .12s linear;"/>
+      <!-- ticks -->
+      <g id="ticks" font-size="10" fill="#566180" text-anchor="middle" font-weight="600"></g>
+    </svg>
+    <div class="gauge-center">
+      <div class="phase-label" id="phaseLabel"><span class="dot"></span><span id="phaseText">준비됨</span></div>
+      <div class="speed-value" id="speedValue">0</div>
+      <div class="speed-unit">Mbps</div>
+    </div>
+  </div>
+
+  <button class="start-btn" id="startBtn">시작</button>
+
+  <div class="err" id="errBox"></div>
+
+  <div class="cards">
+    <div class="card pg" id="cardPing">
+      <div class="label"><span class="bar"></span>핑 (지연시간)</div>
+      <div class="value" id="pingVal">—<small>ms</small></div>
+    </div>
+    <div class="card jt" id="cardJitter">
+      <div class="label"><span class="bar"></span>지터</div>
+      <div class="value" id="jitterVal">—<small>ms</small></div>
+    </div>
+    <div class="card dl" id="cardDown">
+      <div class="label"><span class="bar"></span>다운로드</div>
+      <div class="value" id="downVal">—<small>Mbps</small></div>
+    </div>
+    <div class="card ul" id="cardUp">
+      <div class="label"><span class="bar"></span>업로드</div>
+      <div class="value" id="upVal">—<small>Mbps</small></div>
+    </div>
+  </div>
+
+  <div class="graph-panel">
+    <h3>실시간 속도 그래프</h3>
+    <canvas id="graph"></canvas>
+  </div>
+
+  <div class="grade" id="gradeBox">
+    <div class="title" id="gradeTitle"></div>
+    <div class="desc" id="gradeDesc"></div>
+  </div>
+</main>
+
+<footer>
+  측정 서버: Cloudflare 글로벌 엣지 네트워크 · 별도 설치 없이 브라우저에서 바로 측정됩니다.<br>
+  Wi-Fi 환경, 동시 사용 기기, 브라우저 성능에 따라 실제 회선 속도와 차이가 있을 수 있습니다.
+</footer>
+
+<script>
+"use strict";
+
+const DOWN_URL = bytes => `https://speed.cloudflare.com/__down?bytes=${bytes}`;
+const UP_URL = "https://speed.cloudflare.com/__up";
+const META_URL = "https://speed.cloudflare.com/meta";
+
+const $ = id => document.getElementById(id);
+const speedValue = $("speedValue"), phaseText = $("phaseText"), phaseLabel = $("phaseLabel");
+const gaugeArc = $("gaugeArc"), startBtn = $("startBtn"), errBox = $("errBox");
+
+let testing = false;
+
+/* ---------- Gauge ---------- */
+// 로그 스케일: 1 → 1000 Mbps
+function gaugeFrac(mbps) {
+  if (mbps <= 1) return Math.max(0, mbps / 1) * 0.08;
+  const f = 0.08 + 0.92 * (Math.log10(mbps) / 3); // 10^3 = 1000
+  return Math.min(1, f);
+}
+function setGauge(mbps) {
+  const frac = gaugeFrac(mbps);
+  gaugeArc.setAttribute("stroke-dasharray", `${(frac * 100).toFixed(2)} 100`);
+  gaugeArc.style.opacity = frac < 0.005 ? "0" : "1"; // 0일 때 라운드캡 점 숨김
+  speedValue.textContent = mbps >= 100 ? Math.round(mbps) : mbps > 0 ? mbps.toFixed(1) : "0";
+}
+// 눈금 라벨
+(function drawTicks() {
+  const g = $("ticks");
+  const marks = [0, 1, 5, 10, 50, 100, 500, 1000];
+  marks.forEach(m => {
+    const frac = m === 0 ? 0 : gaugeFrac(m);
+    // 아크 중심 (150,170), 각도 213° → -33° (게이지 진행 방향)
+    const rad = (213 - frac * 246) * Math.PI / 180;
+    const r = 97;
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", (150 + r * Math.cos(rad)).toFixed(1));
+    t.setAttribute("y", (170 - r * Math.sin(rad)).toFixed(1));
+    t.textContent = m;
+    g.appendChild(t);
+  });
+})();
+
+/* ---------- Graph ---------- */
+const graph = $("graph");
+const gctx = graph.getContext("2d");
+let graphData = []; // {t, mbps, phase}
+function resizeGraph() {
+  const dpr = window.devicePixelRatio || 1;
+  graph.width = graph.clientWidth * dpr;
+  graph.height = graph.clientHeight * dpr;
+  gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawGraph();
+}
+window.addEventListener("resize", resizeGraph);
+function drawGraph() {
+  const w = graph.clientWidth, h = graph.clientHeight;
+  gctx.clearRect(0, 0, w, h);
+  if (graphData.length < 2) return;
+  const maxV = Math.max(10, ...graphData.map(d => d.mbps)) * 1.15;
+  const t0 = graphData[0].t, t1 = graphData[graphData.length - 1].t;
+  const span = Math.max(1000, t1 - t0);
+  const colors = { down: "#2f81f7", up: "#a970ff" };
+  ["down", "up"].forEach(phase => {
+    const pts = graphData.filter(d => d.phase === phase);
+    if (pts.length < 2) return;
+    gctx.beginPath();
+    pts.forEach((d, i) => {
+      const x = ((d.t - t0) / span) * w;
+      const y = h - (d.mbps / maxV) * (h - 8) - 4;
+      i === 0 ? gctx.moveTo(x, y) : gctx.lineTo(x, y);
+    });
+    gctx.strokeStyle = colors[phase];
+    gctx.lineWidth = 2;
+    gctx.lineJoin = "round";
+    gctx.stroke();
+    // fill
+    const last = pts[pts.length - 1], first = pts[0];
+    gctx.lineTo(((last.t - t0) / span) * w, h);
+    gctx.lineTo(((first.t - t0) / span) * w, h);
+    gctx.closePath();
+    gctx.fillStyle = colors[phase] + "22";
+    gctx.fill();
+  });
+}
+
+/* ---------- Meta (ISP/IP) ---------- */
+(async function loadMeta() {
+  const render = (isp, ip, city, country) => {
+    $("netInfo").innerHTML =
+      `통신사: <b>${isp || "알 수 없음"}</b><br>` +
+      `IP: <b>${ip || "-"}</b> · ${city || ""} ${country || ""}`;
+  };
+  // 1차: Cloudflare meta → 실패 시 ipwho.is 폴백
+  try {
+    const r = await fetch(META_URL);
+    if (r.ok) {
+      const m = await r.json();
+      if (m.clientIp) { render(m.asOrganization, m.clientIp, m.city, m.country); return; }
+    }
+    throw new Error("meta unavailable");
+  } catch {
+    try {
+      const r = await fetch("https://ipwho.is/");
+      const m = await r.json();
+      if (m.success) { render(m.connection && m.connection.isp, m.ip, m.city, m.country_code); return; }
+    } catch {}
+    $("netInfo").textContent = "네트워크 정보를 불러올 수 없습니다";
+  }
+})();
+
+/* ---------- Helpers ---------- */
+const now = () => performance.now();
+function setPhase(text, cls) {
+  phaseText.textContent = text;
+  phaseLabel.className = "phase-label" + (cls ? " " + cls : "");
+}
+function setActiveCard(id) {
+  ["cardPing", "cardJitter", "cardDown", "cardUp"].forEach(c => $(c).classList.remove("active"));
+  if (id) $(id).classList.add("active");
+}
+function fmtMbps(v) { return v >= 100 ? Math.round(v) : v.toFixed(1); }
+
+/* ---------- Ping ---------- */
+async function measurePing(samples = 10) {
+  const times = [];
+  // 워밍업 1회 (커넥션 수립 비용 제외)
+  try { await fetch(DOWN_URL(0), { cache: "no-store" }); } catch {}
+  for (let i = 0; i < samples; i++) {
+    const t0 = now();
+    await fetch(DOWN_URL(0), { cache: "no-store" });
+    times.push(now() - t0);
+    const cur = Math.min(...times);
+    $("pingVal").innerHTML = `${cur.toFixed(0)}<small>ms</small>`;
+  }
+  times.sort((a, b) => a - b);
+  const best = times[0];
+  // 지터: 연속 샘플 차이의 평균
+  let jsum = 0;
+  for (let i = 1; i < times.length; i++) jsum += Math.abs(times[i] - times[i - 1]);
+  const jitter = jsum / (times.length - 1);
+  return { ping: best, jitter };
+}
+
+/* ---------- Download ---------- */
+async function measureDownload(durationMs = 10000, onProgress) {
+  const start = now();
+  let totalBytes = 0;
+  let stop = false;
+  const timer = setTimeout(() => { stop = true; }, durationMs);
+  const controller = new AbortController();
+
+  // 최근 구간 속도 계산용
+  let lastT = start, lastBytes = 0;
+  const report = () => {
+    const t = now();
+    const dt = (t - lastT) / 1000;
+    if (dt >= 0.2) {
+      const inst = ((totalBytes - lastBytes) * 8) / dt / 1e6;
+      lastT = t; lastBytes = totalBytes;
+      onProgress(inst, (totalBytes * 8) / ((t - start) / 1000) / 1e6);
+    }
+  };
+
+  // 병렬 스트림 4개로 회선 포화
+  const CONCURRENCY = 4;
+  const CHUNK = 50 * 1024 * 1024; // 요청당 50MB (시간 만료 시 중단)
+  const worker = async () => {
+    while (!stop) {
+      try {
+        const resp = await fetch(DOWN_URL(CHUNK), { cache: "no-store", signal: controller.signal });
+        const reader = resp.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.length;
+          report();
+          if (stop) { reader.cancel(); break; }
+        }
+      } catch (e) {
+        if (stop) break;
+        throw e;
+      }
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+  const elapsed = (now() - start) / 1000;
+  return (totalBytes * 8) / elapsed / 1e6;
+}
+
+/* ---------- Upload ---------- */
+function uploadOnce(blob, signal, onBytes) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", UP_URL);
+    let prev = 0;
+    xhr.upload.onprogress = e => { onBytes(e.loaded - prev); prev = e.loaded; };
+    xhr.onload = () => resolve();
+    xhr.onerror = () => reject(new Error("upload error"));
+    xhr.onabort = () => resolve();
+    if (signal) signal.addEventListener("abort", () => xhr.abort());
+    xhr.send(blob);
+  });
+}
+async function measureUpload(durationMs = 8000, onProgress) {
+  // 랜덤 데이터 준비 (압축 방지)
+  const chunk = new Uint8Array(8 * 1024 * 1024); // 8MB
+  crypto.getRandomValues(chunk.subarray(0, 65536));
+  for (let i = 65536; i < chunk.length; i += 65536) {
+    chunk.set(chunk.subarray(0, Math.min(65536, chunk.length - i)), i);
+  }
+  const blob = new Blob([chunk]);
+
+  const start = now();
+  let totalBytes = 0, stop = false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => { stop = true; controller.abort(); }, durationMs);
+
+  let lastT = start, lastBytes = 0;
+  const onBytes = n => {
+    totalBytes += n;
+    const t = now();
+    const dt = (t - lastT) / 1000;
+    if (dt >= 0.2) {
+      const inst = ((totalBytes - lastBytes) * 8) / dt / 1e6;
+      lastT = t; lastBytes = totalBytes;
+      onProgress(inst, (totalBytes * 8) / ((t - start) / 1000) / 1e6);
+    }
+  };
+
+  const CONCURRENCY = 3;
+  const worker = async () => {
+    while (!stop) {
+      try { await uploadOnce(blob, controller.signal, onBytes); }
+      catch (e) { if (stop) break; throw e; }
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  } finally { clearTimeout(timer); }
+  const elapsed = (now() - start) / 1000;
+  return (totalBytes * 8) / elapsed / 1e6;
+}
+
+/* ---------- Grade ---------- */
+function showGrade(down, up, ping) {
+  const box = $("gradeBox");
+  let title, desc;
+  if (down >= 400) {
+    title = "🚀 매우 빠름 — 기가급 회선";
+    desc = "4K 스트리밍, 대용량 게임 다운로드, 다인 가구 동시 사용까지 모두 여유롭습니다.";
+  } else if (down >= 100) {
+    title = "✅ 빠름 — 쾌적한 인터넷";
+    desc = "4K 스트리밍과 화상회의, 온라인 게임을 동시에 사용해도 문제없는 속도입니다.";
+  } else if (down >= 30) {
+    title = "🙂 보통 — 일상 사용에 충분";
+    desc = "FHD 스트리밍, 웹서핑, 화상회의에 충분합니다. 대용량 다운로드는 다소 시간이 걸릴 수 있습니다.";
+  } else if (down >= 10) {
+    title = "😐 느림 — 기본 사용 가능";
+    desc = "웹서핑과 일반 화질 영상은 가능하지만, 고화질 스트리밍이나 대용량 전송은 버벅일 수 있습니다.";
+  } else {
+    title = "🐌 매우 느림";
+    desc = "공유기 재부팅, 유선(LAN) 연결, 통신사 문의를 권장합니다.";
+  }
+  desc += ` 핑 ${ping.toFixed(0)}ms는 ${ping < 20 ? "온라인 게임에도 매우 좋은 수준입니다." : ping < 60 ? "일반 사용에 무난한 수준입니다." : "다소 높아 실시간 게임에서는 지연을 느낄 수 있습니다."}`;
+  $("gradeTitle").textContent = title;
+  $("gradeDesc").textContent = desc;
+  box.classList.add("show");
+}
+
+/* ---------- Main flow ---------- */
+async function runTest() {
+  if (testing) return;
+  testing = true;
+  startBtn.disabled = true;
+  startBtn.classList.add("testing");
+  startBtn.textContent = "측정 중…";
+  errBox.classList.remove("show");
+  $("gradeBox").classList.remove("show");
+  graphData = [];
+  ["pingVal", "jitterVal"].forEach(id => $(id).innerHTML = `—<small>ms</small>`);
+  ["downVal", "upVal"].forEach(id => $(id).innerHTML = `—<small>Mbps</small>`);
+  setGauge(0);
+
+  try {
+    // 1) Ping
+    setPhase("핑 측정 중", "ping");
+    setActiveCard("cardPing");
+    const { ping, jitter } = await measurePing();
+    $("pingVal").innerHTML = `${ping.toFixed(0)}<small>ms</small>`;
+    $("jitterVal").innerHTML = `${jitter.toFixed(1)}<small>ms</small>`;
+
+    // 2) Download
+    setPhase("다운로드 측정 중", "down");
+    setActiveCard("cardDown");
+    const down = await measureDownload(10000, (inst, avg) => {
+      setGauge(inst);
+      graphData.push({ t: now(), mbps: inst, phase: "down" });
+      drawGraph();
+      $("downVal").innerHTML = `${fmtMbps(avg)}<small>Mbps</small>`;
+    });
+    $("downVal").innerHTML = `${fmtMbps(down)}<small>Mbps</small>`;
+    setGauge(down);
+
+    // 3) Upload
+    setPhase("업로드 측정 중", "up");
+    setActiveCard("cardUp");
+    const up = await measureUpload(8000, (inst, avg) => {
+      setGauge(inst);
+      graphData.push({ t: now(), mbps: inst, phase: "up" });
+      drawGraph();
+      $("upVal").innerHTML = `${fmtMbps(avg)}<small>Mbps</small>`;
+    });
+    $("upVal").innerHTML = `${fmtMbps(up)}<small>Mbps</small>`;
+
+    // 완료
+    setPhase("측정 완료", "");
+    setActiveCard(null);
+    setGauge(down);
+    showGrade(down, up, ping);
+  } catch (e) {
+    console.error(e);
+    errBox.textContent = "측정 중 오류가 발생했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요. (" + e.message + ")";
+    errBox.classList.add("show");
+    setPhase("오류", "");
+    setActiveCard(null);
+  } finally {
+    testing = false;
+    startBtn.disabled = false;
+    startBtn.classList.remove("testing");
+    startBtn.textContent = "다시 측정";
+  }
+}
+
+startBtn.addEventListener("click", runTest);
+resizeGraph();
+setGauge(0);
+</script>
+</body>
+</html>
