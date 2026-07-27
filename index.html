@@ -158,6 +158,14 @@
     color: #ffb3c2; font-size: 13.5px; border-radius: 12px; padding: 12px 16px; width: 100%;
   }
   .err.show { display: block; }
+  .warn {
+    display: none;
+    background: rgba(247,183,49,.10); border: 1px solid rgba(247,183,49,.45);
+    color: #ffd98a; font-size: 13.5px; border-radius: 12px; padding: 12px 16px; width: 100%;
+    line-height: 1.7;
+  }
+  .warn.show { display: block; }
+  .warn b { color: #ffe6b0; }
 </style>
 </head>
 <body>
@@ -194,6 +202,12 @@
   </div>
 
   <button class="start-btn" id="startBtn">시작</button>
+
+  <div class="warn" id="cellWarn">
+    📶 <b>모바일 데이터(LTE/5G) 연결이 감지되었습니다.</b><br>
+    속도 측정에는 수백 MB의 데이터가 사용될 수 있어 측정 기능이 비활성화되었습니다.
+    Wi-Fi에 연결하면 자동으로 다시 활성화됩니다.
+  </div>
 
   <div class="err" id="errBox"></div>
 
@@ -507,9 +521,25 @@ function showGrade(down, up, ping) {
   box.classList.add("show");
 }
 
+/* ---------- Cellular gate ---------- */
+// 모바일 데이터(셀룰러) 연결 시 측정 비활성화 — 측정에 수백 MB가 소모되므로 요금 보호
+const netConn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+function isCellular() {
+  return !!(netConn && netConn.type === "cellular");
+}
+function updateCellGate() {
+  const cellular = isCellular();
+  $("cellWarn").classList.toggle("show", cellular);
+  if (!testing) startBtn.disabled = cellular;
+}
+if (netConn && typeof netConn.addEventListener === "function") {
+  netConn.addEventListener("change", updateCellGate);
+}
+
 /* ---------- Main flow ---------- */
 async function runTest() {
   if (testing) return;
+  if (isCellular()) { updateCellGate(); return; }
   testing = true;
   startBtn.disabled = true;
   startBtn.classList.add("testing");
@@ -568,12 +598,14 @@ async function runTest() {
     startBtn.disabled = false;
     startBtn.classList.remove("testing");
     startBtn.textContent = "다시 측정";
+    updateCellGate(); // 측정 중 셀룰러로 전환된 경우 재차 비활성화
   }
 }
 
 startBtn.addEventListener("click", runTest);
 resizeGraph();
 setGauge(0);
+updateCellGate();
 </script>
 </body>
 </html>
