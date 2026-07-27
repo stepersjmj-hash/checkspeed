@@ -166,6 +166,12 @@
   }
   .warn.show { display: block; }
   .warn b { color: #ffe6b0; }
+  .notice {
+    display: none;
+    font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.6;
+    margin-top: -10px;
+  }
+  .notice.show { display: block; }
 </style>
 </head>
 <body>
@@ -207,6 +213,10 @@
     📶 <b>모바일 데이터(LTE/5G) 연결이 감지되었습니다.</b><br>
     속도 측정에는 수백 MB의 데이터가 사용될 수 있어 측정 기능이 비활성화되었습니다.
     Wi-Fi에 연결하면 자동으로 다시 활성화됩니다.
+  </div>
+
+  <div class="notice" id="dataNotice">
+    ⚠️ 측정에는 수백 MB의 데이터가 사용될 수 있습니다. 모바일 데이터(LTE/5G) 환경이라면 Wi-Fi 연결 후 이용을 권장합니다.
   </div>
 
   <div class="err" id="errBox"></div>
@@ -530,6 +540,9 @@ function isCellular() {
 function updateCellGate() {
   const cellular = isCellular();
   $("cellWarn").classList.toggle("show", cellular);
+  // 연결 종류를 감지할 수 없는 브라우저(iOS Safari 등)에는 일반 안내 문구 상시 표시
+  const canDetect = !!(netConn && typeof netConn.type === "string");
+  $("dataNotice").classList.toggle("show", !canDetect);
   if (!testing) startBtn.disabled = cellular;
 }
 if (netConn && typeof netConn.addEventListener === "function") {
