@@ -391,13 +391,12 @@ async function measurePing(samples = 10) {
     const cur = Math.min(...times);
     $("pingVal").innerHTML = `${cur.toFixed(0)}<small>ms</small>`;
   }
-  times.sort((a, b) => a - b);
-  const best = times[0];
-  // 지터: 연속 샘플 차이의 평균
+  // 지터: 측정 순서대로 본 연속 샘플 차이의 평균.
+  // 정렬한 뒤 계산하면 중간 항이 상쇄되어 (최댓값-최솟값)/(n-1) 이 되므로 정렬하지 않는다.
   let jsum = 0;
   for (let i = 1; i < times.length; i++) jsum += Math.abs(times[i] - times[i - 1]);
   const jitter = jsum / (times.length - 1);
-  return { ping: best, jitter };
+  return { ping: Math.min(...times), jitter };
 }
 
 /* ---------- Download ---------- */
