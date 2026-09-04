@@ -96,7 +96,13 @@
   }
   .start-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(47,129,247,.45); }
   .start-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
-  .start-btn.testing { background: var(--panel2); border: 1px solid var(--line); color: var(--muted); box-shadow: none; }
+  .start-btn.testing {
+    background: transparent; border: 1px solid rgba(255,92,122,.55);
+    color: #ff8ba3; box-shadow: none;
+  }
+  .start-btn.testing:hover:not(:disabled) {
+    background: rgba(255,92,122,.10); box-shadow: 0 8px 26px rgba(255,92,122,.18);
+  }
 
   /* ===== Result cards ===== */
   .cards {
@@ -268,6 +274,10 @@ const speedValue = $("speedValue"), phaseText = $("phaseText"), phaseLabel = $("
 const gaugeArc = $("gaugeArc"), startBtn = $("startBtn"), errBox = $("errBox");
 
 let testing = false;
+let cancelRequested = false;
+let runCtl = null;            // 측정 전체를 취소하는 AbortController
+const CANCELLED = Symbol("cancelled");
+function throwIfCancelled() { if (cancelRequested) throw CANCELLED; }
 
 /* ---------- Gauge ---------- */
 // 로그 스케일: 1 → 1000 Mbps
@@ -380,32 +390,40 @@ function setActiveCard(id) {
 function fmtMbps(v) { return v >= 100 ? Math.round(v) : v.toFixed(1); }
 
 /* ---------- Ping ---------- */
-async function measurePing(samples = 10) {
+async function measurePing(samples = 10, signal) {
   const times = [];
   // 워밍업 1회 (커넥션 수립 비용 제외)
-  try { await fetch(DOWN_URL(0), { cache: "no-store" }); } catch {}
+  try { await fetch(DOWN_URL(0), { cache: "no-store", signal }); } catch {}
   for (let i = 0; i < samples; i++) {
+    if (signal && signal.aborted) break;
     const t0 = now();
-    await fetch(DOWN_URL(0), { cache: "no-store" });
+    await fetch(DOWN_URL(0), { cache: "no-store", signal });
     times.push(now() - t0);
     const cur = Math.min(...times);
     $("pingVal").innerHTML = `${cur.toFixed(0)}<small>ms</small>`;
   }
+  if (!times.length) return { ping: 0, jitter: 0 };
   // 지터: 측정 순서대로 본 연속 샘플 차이의 평균.
   // 정렬한 뒤 계산하면 중간 항이 상쇄되어 (최댓값-최솟값)/(n-1) 이 되므로 정렬하지 않는다.
   let jsum = 0;
   for (let i = 1; i < times.length; i++) jsum += Math.abs(times[i] - times[i - 1]);
-  const jitter = jsum / (times.length - 1);
+  const jitter = times.length > 1 ? jsum / (times.length - 1) : 0;
   return { ping: Math.min(...times), jitter };
 }
 
 /* ---------- Download ---------- */
-async function measureDownload(durationMs = 10000, onProgress) {
+async function measureDownload(durationMs = 10000, onProgress, extSignal) {
   const start = now();
   let totalBytes = 0;
   let stop = false;
   const timer = setTimeout(() => { stop = true; }, durationMs);
   const controller = new AbortController();
+  // 사용자가 중지를 누르면 즉시 종료
+  const onExtAbort = () => { stop = true; controller.abort(); };
+  if (extSignal) {
+    if (extSignal.aborted) onExtAbort();
+    else extSignal.addEventListener("abort", onExtAbort, { once: true });
+  }
 
   // 최근 구간 속도 계산용
   let lastT = start, lastBytes = 0;
@@ -445,6 +463,7 @@ async function measureDownload(durationMs = 10000, onProgress) {
   } finally {
     clearTimeout(timer);
     controller.abort();
+    if (extSignal) extSignal.removeEventListener("abort", onExtAbort);
   }
   const elapsed = (now() - start) / 1000;
   return (totalBytes * 8) / elapsed / 1e6;
@@ -464,7 +483,7 @@ function uploadOnce(blob, signal, onBytes) {
     xhr.send(blob);
   });
 }
-async function measureUpload(durationMs = 8000, onProgress) {
+async function measureUpload(durationMs = 8000, onProgress, extSignal) {
   // 랜덤 데이터 준비 (압축 방지)
   const chunk = new Uint8Array(8 * 1024 * 1024); // 8MB
   crypto.getRandomValues(chunk.subarray(0, 65536));
@@ -477,6 +496,12 @@ async function measureUpload(durationMs = 8000, onProgress) {
   let totalBytes = 0, stop = false;
   const controller = new AbortController();
   const timer = setTimeout(() => { stop = true; controller.abort(); }, durationMs);
+  // 사용자가 중지를 누르면 즉시 종료
+  const onExtAbort = () => { stop = true; controller.abort(); };
+  if (extSignal) {
+    if (extSignal.aborted) onExtAbort();
+    else extSignal.addEventListener("abort", onExtAbort, { once: true });
+  }
 
   let lastT = start, lastBytes = 0;
   const onBytes = n => {
@@ -499,7 +524,10 @@ async function measureUpload(durationMs = 8000, onProgress) {
   };
   try {
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+    if (extSignal) extSignal.removeEventListener("abort", onExtAbort);
+  }
   const elapsed = (now() - start) / 1000;
   return (totalBytes * 8) / elapsed / 1e6;
 }
@@ -553,12 +581,15 @@ async function runTest() {
   if (testing) return;
   if (isCellular()) { updateCellGate(); return; }
   testing = true;
-  startBtn.disabled = true;
+  cancelRequested = false;
+  runCtl = new AbortController();
+  startBtn.disabled = false;          // 측정 중에는 '중지' 버튼으로 동작
   startBtn.classList.add("testing");
-  startBtn.textContent = "측정 중…";
+  startBtn.textContent = "중지";
   errBox.classList.remove("show");
   $("gradeBox").classList.remove("show");
   graphData = [];
+  drawGraph();                        // 이전 측정 그래프 지우기
   ["pingVal", "jitterVal"].forEach(id => $(id).innerHTML = `—<small>ms</small>`);
   ["downVal", "upVal"].forEach(id => $(id).innerHTML = `—<small>Mbps</small>`);
   setGauge(0);
@@ -567,7 +598,8 @@ async function runTest() {
     // 1) Ping
     setPhase("핑 측정 중", "ping");
     setActiveCard("cardPing");
-    const { ping, jitter } = await measurePing();
+    const { ping, jitter } = await measurePing(10, runCtl.signal);
+    throwIfCancelled();
     $("pingVal").innerHTML = `${ping.toFixed(0)}<small>ms</small>`;
     $("jitterVal").innerHTML = `${jitter.toFixed(1)}<small>ms</small>`;
 
@@ -579,7 +611,8 @@ async function runTest() {
       graphData.push({ t: now(), mbps: inst, phase: "down" });
       drawGraph();
       $("downVal").innerHTML = `${fmtMbps(avg)}<small>Mbps</small>`;
-    });
+    }, runCtl.signal);
+    throwIfCancelled();
     $("downVal").innerHTML = `${fmtMbps(down)}<small>Mbps</small>`;
     setGauge(down);
 
@@ -591,7 +624,8 @@ async function runTest() {
       graphData.push({ t: now(), mbps: inst, phase: "up" });
       drawGraph();
       $("upVal").innerHTML = `${fmtMbps(avg)}<small>Mbps</small>`;
-    });
+    }, runCtl.signal);
+    throwIfCancelled();
     $("upVal").innerHTML = `${fmtMbps(up)}<small>Mbps</small>`;
 
     // 완료
@@ -600,13 +634,22 @@ async function runTest() {
     setGauge(down);
     showGrade(down, up, ping);
   } catch (e) {
-    console.error(e);
-    errBox.textContent = "측정 중 오류가 발생했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요. (" + e.message + ")";
-    errBox.classList.add("show");
-    setPhase("오류", "");
-    setActiveCard(null);
+    if (cancelRequested) {
+      // 사용자가 중지 — 지금까지 측정된 값은 그대로 두고 종료
+      setPhase("측정 중지됨", "");
+      setActiveCard(null);
+      setGauge(0);
+    } else {
+      console.error(e);
+      errBox.textContent = "측정 중 오류가 발생했습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요. (" + e.message + ")";
+      errBox.classList.add("show");
+      setPhase("오류", "");
+      setActiveCard(null);
+    }
   } finally {
     testing = false;
+    cancelRequested = false;
+    runCtl = null;
     startBtn.disabled = false;
     startBtn.classList.remove("testing");
     startBtn.textContent = "다시 측정";
@@ -614,7 +657,17 @@ async function runTest() {
   }
 }
 
-startBtn.addEventListener("click", runTest);
+/* ---------- Stop ---------- */
+function stopTest() {
+  if (!testing || cancelRequested) return;
+  cancelRequested = true;
+  if (runCtl) runCtl.abort();   // 진행 중인 다운로드/업로드 즉시 중단
+  startBtn.disabled = true;
+  startBtn.textContent = "중지 중…";
+  setPhase("중지하는 중", "");
+}
+
+startBtn.addEventListener("click", () => { testing ? stopTest() : runTest(); });
 resizeGraph();
 setGauge(0);
 updateCellGate();
