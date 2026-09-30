@@ -4,256 +4,231 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>스피드체크 — 인터넷 속도 측정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
   :root {
-    --bg: #0b0f1a;
-    --panel: #131a2b;
-    --panel2: #1a2338;
-    --line: #263252;
-    --text: #e8edf7;
-    --muted: #8b96b0;
-    --accent: #2f81f7;
-    --accent2: #21d4a4;
-    --down: #2f81f7;
-    --up: #a970ff;
-    --ping: #21d4a4;
-    --danger: #ff5c7a;
+    --bg: #fbf5ee;
+    --panel: #ffffff;
+    --text: #2b2440;
+    --muted: #7a7090;
+    --faint: #a89fbd;
+    --track: #efe5f5;
+    --soft: #f6f0ff;
+    --down: #7c6cff;
+    --up: #ff7aa8;
+    --ping: #3cc7a0;
+    --jitter: #ffb547;
+    --danger: #d9487a;
+    --shadow: 0 10px 30px rgba(92, 64, 140, 0.07);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
-    background: radial-gradient(1200px 700px at 50% -10%, #16203a 0%, var(--bg) 60%);
+    background: var(--bg);
     color: var(--text);
     font-family: "Pretendard", "Noto Sans KR", -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: flex; flex-direction: column; align-items: center;
     min-height: 100%;
   }
+  a { color: var(--down); }
+  a:hover { color: var(--text); }
+  .num { font-family: "Outfit", "Pretendard", sans-serif; font-variant-numeric: tabular-nums; }
+
   header {
-    width: 100%;
-    max-width: 960px;
-    padding: 24px 20px 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    width: 100%; max-width: 1040px;
+    padding: 28px 24px 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   }
-  .logo {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 20px; font-weight: 800; letter-spacing: -0.5px;
+  .logo { display: flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 800; letter-spacing: -0.03em; }
+  .logo .blob { width: 38px; height: 38px; border-radius: 50%; background: var(--down); display: grid; place-items: center; }
+  .logo .blob span { width: 14px; height: 14px; border-radius: 50%; background: #ffd6e4; }
+  .net-info {
+    background: var(--panel); border-radius: 999px; padding: 10px 20px;
+    font-size: 13px; color: var(--muted); box-shadow: 0 6px 20px rgba(92,64,140,.07);
+    display: flex; gap: 14px; flex-wrap: wrap;
   }
-  .logo .bolt {
-    width: 34px; height: 34px; border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    display: grid; place-items: center; font-size: 18px;
-  }
-  .net-info { text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
-  .net-info b { color: var(--text); font-weight: 600; }
+  .net-info b { color: var(--text); font-weight: 700; }
 
   main {
-    width: 100%; max-width: 960px;
-    padding: 12px 20px 40px;
-    display: flex; flex-direction: column; align-items: center; gap: 22px;
+    width: 100%; max-width: 1040px;
+    padding: 12px 24px 40px;
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
   }
 
-  /* ===== Gauge ===== */
-  .gauge-wrap { position: relative; width: min(420px, 88vw); user-select: none; }
-  .gauge-wrap svg { width: 100%; height: auto; display: block; }
+  /* ===== Dial ===== */
+  .gauge-wrap { position: relative; width: min(440px, 90vw); aspect-ratio: 320 / 300; user-select: none; }
+  .gauge-wrap svg { width: 100%; height: 100%; display: block; }
   .gauge-center {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding-top: 6%;
+    position: absolute; left: 0; right: 0; top: 0; height: 85.4%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
     pointer-events: none;
   }
   .phase-label {
-    font-size: 13px; font-weight: 700; letter-spacing: 2px;
-    color: var(--muted); text-transform: uppercase;
-    display: flex; align-items: center; gap: 7px;
-    min-height: 20px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--soft); border-radius: 999px; padding: 6px 14px;
+    font-size: 13px; font-weight: 700; color: #5d5378;
   }
-  .phase-label .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-  .phase-label.down .dot { background: var(--down); box-shadow: 0 0 10px var(--down); }
-  .phase-label.up .dot { background: var(--up); box-shadow: 0 0 10px var(--up); }
-  .phase-label.ping .dot { background: var(--ping); box-shadow: 0 0 10px var(--ping); }
-  .speed-value {
-    font-size: clamp(48px, 13vw, 74px);
-    font-weight: 800; letter-spacing: -2px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.05;
-  }
-  .speed-unit { font-size: 15px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+  .phase-label .dot { width: 8px; height: 8px; border-radius: 50%; background: #c9c0d8; transition: background .2s; }
+  .phase-label.ping .dot { background: var(--ping); }
+  .phase-label.down .dot { background: var(--down); }
+  .phase-label.up .dot { background: var(--up); }
+  .speed-value { font-size: clamp(56px, 18vw, 96px); font-weight: 800; letter-spacing: -0.04em; line-height: 1; margin-top: 6px; }
+  .speed-unit { font-size: 17px; font-weight: 600; color: var(--faint); }
 
   /* ===== Start button ===== */
   .start-btn {
-    margin-top: -6px;
-    padding: 15px 58px;
-    font-size: 17px; font-weight: 800; letter-spacing: 1px;
-    color: #fff; background: linear-gradient(135deg, var(--accent), #6a5cff);
-    border: none; border-radius: 999px; cursor: pointer;
-    box-shadow: 0 8px 30px rgba(47, 129, 247, 0.35);
-    transition: transform .15s, box-shadow .15s, opacity .15s;
-    font-family: inherit;
+    margin-top: -40px;
+    height: 62px; padding: 0 64px;
+    border-radius: 999px; border: 2px solid var(--text);
+    background: var(--text); color: #fff;
+    font-family: inherit; font-size: 18px; font-weight: 800; cursor: pointer;
+    box-shadow: 0 12px 30px rgba(43,36,64,.18);
+    transition: transform .15s, opacity .15s, background .15s;
   }
-  .start-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(47,129,247,.45); }
-  .start-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
-  .start-btn.testing {
-    background: transparent; border: 1px solid rgba(255,92,122,.55);
-    color: #ff8ba3; box-shadow: none;
-  }
-  .start-btn.testing:hover:not(:disabled) {
-    background: rgba(255,92,122,.10); box-shadow: 0 8px 26px rgba(255,92,122,.18);
-  }
+  .start-btn:hover:not(:disabled) { transform: translateY(-2px); }
+  .start-btn:disabled { opacity: .45; cursor: default; }
+  .start-btn.testing { background: #fff; color: var(--danger); border-color: #ffb3cb; }
 
   /* ===== Result cards ===== */
-  .cards {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-  }
-  @media (max-width: 640px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  .cards { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
   .card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 16px 18px;
-    display: flex; flex-direction: column; gap: 6px;
-    transition: border-color .3s;
+    background: var(--panel); border-radius: 28px; padding: 22px 24px;
+    display: flex; flex-direction: column; gap: 10px;
+    box-shadow: var(--shadow);
+    outline: 2px solid transparent; transition: outline-color .2s;
   }
-  .card.active { border-color: var(--accent); }
-  .card .label { font-size: 12.5px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
-  .card .bar { width: 4px; height: 12px; border-radius: 2px; }
-  .card.dl .bar { background: var(--down); }
-  .card.ul .bar { background: var(--up); }
-  .card.pg .bar { background: var(--ping); }
-  .card.jt .bar { background: #f7b731; }
-  .card .value {
-    font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
-    font-variant-numeric: tabular-nums;
-  }
-  .card .value small { font-size: 13px; color: var(--muted); font-weight: 600; margin-left: 3px; }
+  .card.active { outline-color: #c9bfff; }
+  .card .label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .card .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .card.pg .dot { background: var(--ping); }
+  .card.jt .dot { background: var(--jitter); }
+  .card.dl .dot { background: var(--down); }
+  .card.ul .dot { background: var(--up); }
+  .card .value { font-size: clamp(30px, 6vw, 40px); font-weight: 800; letter-spacing: -0.03em; }
+  .card .value small { font-family: "Pretendard", sans-serif; font-size: 14px; color: var(--faint); font-weight: 600; margin-left: 5px; letter-spacing: 0; }
 
-  /* ===== Progress graph ===== */
+  /* ===== Graph ===== */
   .graph-panel {
-    width: 100%;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 16px 18px 10px;
+    width: 100%; background: var(--panel); border-radius: 28px;
+    padding: 22px 26px 16px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 12px;
   }
-  .graph-panel h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
-  #graph { width: 100%; height: 110px; display: block; }
+  .graph-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .legend { display: flex; gap: 16px; font-size: 13px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 50%; }
+  #graph { width: 100%; height: 130px; display: block; }
 
+  /* ===== Grade ===== */
   .grade {
-    width: 100%;
-    background: linear-gradient(135deg, rgba(47,129,247,.12), rgba(33,212,164,.10));
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 18px 20px;
-    display: none;
-    gap: 4px; flex-direction: column;
+    width: 100%; background: #efe8ff; border-radius: 28px; padding: 26px 30px;
+    display: none; gap: 22px; align-items: center;
   }
   .grade.show { display: flex; }
-  .grade .title { font-size: 15px; font-weight: 800; }
-  .grade .desc { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
+  .grade .emoji { width: 64px; height: 64px; flex: none; border-radius: 50%; background: #fff; display: grid; place-items: center; font-size: 30px; }
+  .grade .body { display: flex; flex-direction: column; gap: 6px; }
+  .grade .title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .grade .title span { color: var(--down); }
+  .grade .desc { font-size: 15px; line-height: 1.7; color: #5d5378; text-wrap: pretty; }
+  @media (max-width: 520px) { .grade { flex-direction: column; align-items: flex-start; } }
 
-  footer { padding: 18px; font-size: 12px; color: #566180; text-align: center; line-height: 1.7; }
+  footer { padding: 8px 24px 40px; font-size: 12.5px; color: var(--faint); text-align: center; line-height: 1.7; }
   .err {
-    display: none;
-    background: rgba(255,92,122,.12); border: 1px solid rgba(255,92,122,.4);
-    color: #ffb3c2; font-size: 13.5px; border-radius: 12px; padding: 12px 16px; width: 100%;
+    display: none; width: 100%;
+    background: #ffe4ea; color: #a3284d; border-radius: 24px; padding: 18px 24px; font-size: 14px; line-height: 1.7;
   }
   .err.show { display: block; }
   .warn {
-    display: none;
-    background: rgba(247,183,49,.10); border: 1px solid rgba(247,183,49,.45);
-    color: #ffd98a; font-size: 13.5px; border-radius: 12px; padding: 12px 16px; width: 100%;
-    line-height: 1.7;
+    display: none; width: 100%;
+    background: #fff3d6; color: #7a5a12; border-radius: 24px; padding: 18px 24px; font-size: 14px; line-height: 1.7;
   }
   .warn.show { display: block; }
-  .warn b { color: #ffe6b0; }
-  .notice {
-    display: none;
-    font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.6;
-    margin-top: -10px;
-  }
+  .notice { display: none; font-size: 13px; color: #8a809f; text-align: center; line-height: 1.6; margin-top: -8px; }
   .notice.show { display: block; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo"><div class="bolt">⚡</div>스피드체크</div>
+  <div class="logo"><div class="blob"><span></span></div>스피드체크</div>
   <div class="net-info" id="netInfo">네트워크 정보 불러오는 중…</div>
 </header>
 
 <main>
   <div class="gauge-wrap">
-    <svg viewBox="0 0 300 195" id="gaugeSvg">
+    <svg viewBox="0 0 320 300">
       <defs>
-        <linearGradient id="gaugeGrad" x1="0%" y1="100%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#2f81f7"/>
-          <stop offset="60%" stop-color="#21d4a4"/>
-          <stop offset="100%" stop-color="#a970ff"/>
+        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#8fd8c4"/>
+          <stop offset="50%" stop-color="#9d8cff"/>
+          <stop offset="100%" stop-color="#ff8fb5"/>
         </linearGradient>
       </defs>
-      <!-- track -->
-      <path d="M 30 170 A 120 120 0 1 1 270 170" fill="none" stroke="#232e4c" stroke-width="14" stroke-linecap="round"/>
-      <!-- progress -->
-      <path id="gaugeArc" d="M 30 170 A 120 120 0 1 1 270 170" fill="none" stroke="url(#gaugeGrad)"
-            stroke-width="14" stroke-linecap="round" pathLength="100"
-            stroke-dasharray="0 100" style="transition: stroke-dasharray .12s linear;"/>
-      <!-- ticks -->
-      <g id="ticks" font-size="10" fill="#566180" text-anchor="middle" font-weight="600"></g>
+      <circle cx="160" cy="160" r="104" fill="#ffffff"/>
+      <path d="M 68.1 251.9 A 130 130 0 1 1 251.9 251.9" fill="none" stroke="#efe5f5" stroke-width="22" stroke-linecap="round"/>
+      <path id="gaugeArc" d="M 68.1 251.9 A 130 130 0 1 1 251.9 251.9" fill="none" stroke="url(#gaugeGrad)"
+            stroke-width="22" stroke-linecap="round" pathLength="100"
+            stroke-dasharray="0 100" style="transition: stroke-dasharray .15s linear;"/>
+      <text x="68" y="286" text-anchor="middle" font-size="11" fill="#a89fbd" font-family="Outfit" font-weight="600">0</text>
+      <text x="252" y="286" text-anchor="middle" font-size="11" fill="#a89fbd" font-family="Outfit" font-weight="600">1000</text>
     </svg>
     <div class="gauge-center">
       <div class="phase-label" id="phaseLabel"><span class="dot"></span><span id="phaseText">준비됨</span></div>
-      <div class="speed-value" id="speedValue">0</div>
-      <div class="speed-unit">Mbps</div>
+      <div class="speed-value num" id="speedValue">0</div>
+      <div class="speed-unit num">Mbps</div>
     </div>
   </div>
 
   <button class="start-btn" id="startBtn">시작</button>
 
-  <div class="warn" id="cellWarn">
-    📶 <b>모바일 데이터(LTE/5G) 연결이 감지되었습니다.</b><br>
-    속도 측정에는 수백 MB의 데이터가 사용될 수 있어 측정 기능이 비활성화되었습니다.
-    Wi-Fi에 연결하면 자동으로 다시 활성화됩니다.
+  <div class="notice" id="dataNotice">
+    측정에는 수백 MB의 데이터가 사용될 수 있습니다. 모바일 데이터(LTE/5G) 환경이라면 Wi-Fi 연결 후 이용을 권장합니다.
   </div>
 
-  <div class="notice" id="dataNotice">
-    ⚠️ 측정에는 수백 MB의 데이터가 사용될 수 있습니다. 모바일 데이터(LTE/5G) 환경이라면 Wi-Fi 연결 후 이용을 권장합니다.
+  <div class="warn" id="cellWarn">
+    <b>모바일 데이터(LTE/5G) 연결이 감지되었습니다.</b>
+    속도 측정에는 수백 MB의 데이터가 사용될 수 있어 측정 기능이 비활성화되었습니다.
+    Wi-Fi에 연결하면 자동으로 다시 활성화됩니다.
   </div>
 
   <div class="err" id="errBox"></div>
 
   <div class="cards">
     <div class="card pg" id="cardPing">
-      <div class="label"><span class="bar"></span>핑 (지연시간)</div>
-      <div class="value" id="pingVal">—<small>ms</small></div>
+      <div class="label"><span class="dot"></span>핑 (지연시간)</div>
+      <div class="value num" id="pingVal">—<small>ms</small></div>
     </div>
     <div class="card jt" id="cardJitter">
-      <div class="label"><span class="bar"></span>지터</div>
-      <div class="value" id="jitterVal">—<small>ms</small></div>
+      <div class="label"><span class="dot"></span>지터</div>
+      <div class="value num" id="jitterVal">—<small>ms</small></div>
     </div>
     <div class="card dl" id="cardDown">
-      <div class="label"><span class="bar"></span>다운로드</div>
-      <div class="value" id="downVal">—<small>Mbps</small></div>
+      <div class="label"><span class="dot"></span>다운로드</div>
+      <div class="value num" id="downVal">—<small>Mbps</small></div>
     </div>
     <div class="card ul" id="cardUp">
-      <div class="label"><span class="bar"></span>업로드</div>
-      <div class="value" id="upVal">—<small>Mbps</small></div>
+      <div class="label"><span class="dot"></span>업로드</div>
+      <div class="value num" id="upVal">—<small>Mbps</small></div>
     </div>
   </div>
 
   <div class="graph-panel">
-    <h3>실시간 속도 그래프</h3>
+    <div class="graph-head">
+      <span>실시간 속도 그래프</span>
+      <span class="legend"><span><i style="background:var(--down)"></i>다운로드</span><span><i style="background:var(--up)"></i>업로드</span></span>
+    </div>
     <canvas id="graph"></canvas>
   </div>
 
   <div class="grade" id="gradeBox">
-    <div class="title" id="gradeTitle"></div>
-    <div class="desc" id="gradeDesc"></div>
+    <div class="emoji" id="gradeEmoji"></div>
+    <div class="body">
+      <div class="title" id="gradeTitle"></div>
+      <div class="desc" id="gradeDesc"></div>
+    </div>
   </div>
 </main>
 
@@ -292,22 +267,6 @@ function setGauge(mbps) {
   gaugeArc.style.opacity = frac < 0.005 ? "0" : "1"; // 0일 때 라운드캡 점 숨김
   speedValue.textContent = mbps >= 100 ? Math.round(mbps) : mbps > 0 ? mbps.toFixed(1) : "0";
 }
-// 눈금 라벨
-(function drawTicks() {
-  const g = $("ticks");
-  const marks = [0, 1, 5, 10, 50, 100, 500, 1000];
-  marks.forEach(m => {
-    const frac = m === 0 ? 0 : gaugeFrac(m);
-    // 아크 중심 (150,170), 각도 213° → -33° (게이지 진행 방향)
-    const rad = (213 - frac * 246) * Math.PI / 180;
-    const r = 97;
-    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    t.setAttribute("x", (150 + r * Math.cos(rad)).toFixed(1));
-    t.setAttribute("y", (170 - r * Math.sin(rad)).toFixed(1));
-    t.textContent = m;
-    g.appendChild(t);
-  });
-})();
 
 /* ---------- Graph ---------- */
 const graph = $("graph");
@@ -324,30 +283,39 @@ window.addEventListener("resize", resizeGraph);
 function drawGraph() {
   const w = graph.clientWidth, h = graph.clientHeight;
   gctx.clearRect(0, 0, w, h);
+  // 가이드 라인
+  gctx.strokeStyle = "rgba(43,36,64,0.06)";
+  gctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const y = Math.round(h * i / 4) + 0.5;
+    gctx.beginPath(); gctx.moveTo(0, y); gctx.lineTo(w, y); gctx.stroke();
+  }
   if (graphData.length < 2) return;
   const maxV = Math.max(10, ...graphData.map(d => d.mbps)) * 1.15;
   const t0 = graphData[0].t, t1 = graphData[graphData.length - 1].t;
   const span = Math.max(1000, t1 - t0);
-  const colors = { down: "#2f81f7", up: "#a970ff" };
+  const colors = { down: "#7c6cff", up: "#ff7aa8" };
   ["down", "up"].forEach(phase => {
-    const pts = graphData.filter(d => d.phase === phase);
+    const pts = graphData.filter(d => d.phase === phase).map(d => ({
+      x: ((d.t - t0) / span) * w,
+      y: h - (d.mbps / maxV) * (h - 8) - 4
+    }));
     if (pts.length < 2) return;
     gctx.beginPath();
-    pts.forEach((d, i) => {
-      const x = ((d.t - t0) / span) * w;
-      const y = h - (d.mbps / maxV) * (h - 8) - 4;
-      i === 0 ? gctx.moveTo(x, y) : gctx.lineTo(x, y);
-    });
+    gctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i], q = pts[i - 1], mx = (q.x + p.x) / 2;
+      gctx.bezierCurveTo(mx, q.y, mx, p.y, p.x, p.y);
+    }
     gctx.strokeStyle = colors[phase];
-    gctx.lineWidth = 2;
+    gctx.lineWidth = 3;
     gctx.lineJoin = "round";
+    gctx.lineCap = "round";
     gctx.stroke();
-    // fill
-    const last = pts[pts.length - 1], first = pts[0];
-    gctx.lineTo(((last.t - t0) / span) * w, h);
-    gctx.lineTo(((first.t - t0) / span) * w, h);
+    gctx.lineTo(pts[pts.length - 1].x, h);
+    gctx.lineTo(pts[0].x, h);
     gctx.closePath();
-    gctx.fillStyle = colors[phase] + "22";
+    gctx.fillStyle = colors[phase] + "29";
     gctx.fill();
   });
 }
@@ -356,8 +324,8 @@ function drawGraph() {
 (async function loadMeta() {
   const render = (isp, ip, city, country) => {
     $("netInfo").innerHTML =
-      `통신사: <b>${isp || "알 수 없음"}</b><br>` +
-      `IP: <b>${ip || "-"}</b> · ${city || ""} ${country || ""}`;
+      `<span>통신사 <b>${isp || "알 수 없음"}</b></span>` +
+      `<span>IP <b>${ip || "-"}</b> · ${city || ""} ${country || ""}</span>`;
   };
   // 1차: Cloudflare meta → 실패 시 ipwho.is 폴백
   try {
@@ -534,28 +502,31 @@ async function measureUpload(durationMs = 8000, onProgress, extSignal) {
 
 /* ---------- Grade ---------- */
 function showGrade(down, up, ping) {
-  const box = $("gradeBox");
-  let title, desc;
+  let emoji, head, sub, desc;
   if (down >= 400) {
-    title = "🚀 매우 빠름 — 기가급 회선";
+    emoji = "🚀"; head = "매우 빠름"; sub = "— 기가급 회선";
     desc = "4K 스트리밍, 대용량 게임 다운로드, 다인 가구 동시 사용까지 모두 여유롭습니다.";
   } else if (down >= 100) {
-    title = "✅ 빠름 — 쾌적한 인터넷";
+    emoji = "✅"; head = "빠름"; sub = "— 쾌적한 인터넷";
     desc = "4K 스트리밍과 화상회의, 온라인 게임을 동시에 사용해도 문제없는 속도입니다.";
   } else if (down >= 30) {
-    title = "🙂 보통 — 일상 사용에 충분";
+    emoji = "🙂"; head = "보통"; sub = "— 일상 사용에 충분";
     desc = "FHD 스트리밍, 웹서핑, 화상회의에 충분합니다. 대용량 다운로드는 다소 시간이 걸릴 수 있습니다.";
   } else if (down >= 10) {
-    title = "😐 느림 — 기본 사용 가능";
+    emoji = "😐"; head = "느림"; sub = "— 기본 사용 가능";
     desc = "웹서핑과 일반 화질 영상은 가능하지만, 고화질 스트리밍이나 대용량 전송은 버벅일 수 있습니다.";
   } else {
-    title = "🐌 매우 느림";
+    emoji = "🐌"; head = "매우 느림"; sub = "";
     desc = "공유기 재부팅, 유선(LAN) 연결, 통신사 문의를 권장합니다.";
   }
   desc += ` 핑 ${ping.toFixed(0)}ms는 ${ping < 20 ? "온라인 게임에도 매우 좋은 수준입니다." : ping < 60 ? "일반 사용에 무난한 수준입니다." : "다소 높아 실시간 게임에서는 지연을 느낄 수 있습니다."}`;
-  $("gradeTitle").textContent = title;
+  $("gradeEmoji").textContent = emoji;
+  $("gradeTitle").textContent = head + " ";
+  const s = document.createElement("span");
+  s.textContent = sub;
+  $("gradeTitle").appendChild(s);
   $("gradeDesc").textContent = desc;
-  box.classList.add("show");
+  $("gradeBox").classList.add("show");
 }
 
 /* ---------- Cellular gate ---------- */
