@@ -39,6 +39,9 @@ GitHub Pages(main 브랜치 루트)로 서비스된다 — https://stepersjmj-ha
   핑 최솟값은 `Math.min`으로 따로 구한다.
 - 취소 경로에서 `measureDownload`/`measureUpload`는 예외를 던지지 않고 부분 결과를
   반환한다. 중지 판정은 반드시 `runTest` 쪽 `throwIfCancelled()`가 한다.
+- **파비콘** — 아이콘 파일 없이 `<head>`에 data URI 로 인라인한다(PNG 32px + SVG 2개).
+  Safari 는 `rel="icon"` 의 SVG 파비콘을 지원하지 않으므로 PNG 를 앞에 둬야 폴백이 된다.
+  로고 색을 바꾸면 헤더 `.blob` 과 파비콘 두 곳을 같이 고쳐야 한다.
 - 로컬에서 `file://`로 열어도 Cloudflare 엔드포인트는 CORS 허용이라 그대로 테스트된다.
 
 ## 관례
